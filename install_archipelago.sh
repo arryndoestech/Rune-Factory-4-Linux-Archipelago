@@ -147,7 +147,6 @@ main() {
     echo -e "Place that save into ${BLUE}$RF4_LINUX_INSTALL_FOLDER/Archipelago${YELLOW}"
     echo -e "If you have Trupin hints enabled, also place your hints.json file in the same folder as well."
     echo -e "When asked for the rf4 install path paste ${BLUE}$RF4_WINE_INSTALL_PATH${YELLOW}"
-    echo -e "When asked for the save path paste ${BLUE}$RF4_WINE_SAVE_PATH${YELLOW}"
     echo -e "Enjoy!${NC}"
 }
 
