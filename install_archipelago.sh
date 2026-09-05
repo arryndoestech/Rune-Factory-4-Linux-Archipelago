@@ -49,6 +49,7 @@ find_newest_proton() {
         echo "Could not find an installed Proton."
         exit 1
     fi
+    echo "Using Proton: $PROTON_PATH"
 }
 
 install_archipelago() {
@@ -59,7 +60,6 @@ install_archipelago() {
     echo "Downloading archipelago installer..."
     curl -L -# "$INSTALLER_URL" -O
 
-    echo "Using Proton: $PROTON_PATH"
     echo "Installing $INSTALLER_FILE..."
     "$PROTON_PATH" run "$INSTALLER_FILE" /VERYSILENT /NORESTART >/dev/null 2>&1
     rm "$INSTALLER_FILE"
