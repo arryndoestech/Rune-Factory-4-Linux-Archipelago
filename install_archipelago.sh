@@ -15,24 +15,6 @@ PROTON_DIR="$STEAM_DIR/steamapps/common"
 export STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM_DIR"
 export STEAM_COMPAT_DATA_PATH="$STEAM_DIR/steamapps/compatdata/1580240"
 
-# Find the newest normal Proton version
-PROTON_PATH=$(
-    find "$PROTON_DIR" -maxdepth 2 -type f -name proton \
-        -path '*/Proton [0-9]*.[0-9]*/proton' 2>/dev/null |
-    sort -V |
-    tail -n 1
-)
-
-if [ -z "$PROTON_PATH" ]; then
-    echo "Could not find an installed Proton."
-    exit 1
-fi
-
-#Get archipelago installer+apworld
-INSTALLER_URL=$(curl -s https://api.github.com/repos/ArchipelagoMW/Archipelago/releases/latest | jq -r '.assets[].browser_download_url' | grep exe)
-INSTALLER_FILE="${INSTALLER_URL##*/}"
-AP_WORLD_URL=$(curl -s https://api.github.com/repos/Happyhappyism/Rune-Factory-4-Archipelago/releases/latest | jq -r '.assets[].browser_download_url')
-AP_WORLD_FILE="${AP_WORLD_URL##*/}"
 AP_DIR="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/ProgramData/Archipelago"
 AP_PLAYER_DIR="$AP_DIR/Players"
 
@@ -42,27 +24,56 @@ RF4_LINUX_INSTALL_FOLDER="$STEAM_DIR/steamapps/common/Rune Factory 4 Special"
 RF4_WINE_INSTALL_PATH="Z:$STEAM_DIR/steamapps/common/Rune Factory 4 Special"
 RF4_WINE_SAVE_PATH="C:/users/steamuser/AppData/Roaming/Rune Factory 4 Special"
 
-echo "Downloading archipelago installer..."
-curl -L -# "$INSTALLER_URL" -O
+install_ap_world() {
+    AP_WORLD_URL=$(curl -s https://api.github.com/repos/Happyhappyism/Rune-Factory-4-Archipelago/releases/latest | jq -r '.assets[].browser_download_url')
+    AP_WORLD_FILE="${AP_WORLD_URL##*/}"
+    echo "Downloading Rune Factory 4 Special apworld..."
+    curl -L -# "$AP_WORLD_URL" -O
 
-echo "Downloading Rune Factory 4 Special apworld..."
-curl -L -# "$AP_WORLD_URL" -O
+    echo "Installing Rune Factory 4 apworld..."
+    mkdir -p "$RF4_LINUX_INSTALL_FOLDER/Archipelago"
+    mkdir -p "$AP_DIR/custom_worlds"
+    mv "$AP_WORLD_FILE" "$AP_DIR/custom_worlds"
+}
 
-echo "Using Proton: $PROTON_PATH"
-echo "Installing $INSTALLER_FILE..."
-"$PROTON_PATH" run "$INSTALLER_FILE" /VERYSILENT /NORESTART >/dev/null 2>&1
+find_newest_proton() {
+    # Find the newest normal Proton version
+    PROTON_PATH=$(
+        find "$PROTON_DIR" -maxdepth 2 -type f -name proton \
+            -path '*/Proton [0-9]*.[0-9]*/proton' 2>/dev/null |
+        sort -V |
+        tail -n 1
+    )
 
-echo "Installing Rune Factory 4 apworld..."
-mkdir -p "$RF4_LINUX_INSTALL_FOLDER/Archipelago"
-mkdir -p "$AP_DIR/custom_worlds"
-mv "$AP_WORLD_FILE" "$AP_DIR/custom_worlds"
+    if [ -z "$PROTON_PATH" ]; then
+        echo "Could not find an installed Proton."
+        exit 1
+    fi
+}
 
-echo "Generating yaml templates..."
-"$PROTON_PATH" run "C:\ProgramData\Archipelago\ArchipelagoLauncher.exe" "Generate Template Options" -- --skip_open_folder >/dev/null 2>&1
+install_archipelago() {
+    #Get archipelago installer+apworld
+    INSTALLER_URL=$(curl -s https://api.github.com/repos/ArchipelagoMW/Archipelago/releases/latest | jq -r '.assets[].browser_download_url' | grep exe)
+    INSTALLER_FILE="${INSTALLER_URL##*/}"
 
-echo "Installing Rune Factory 4 Special yaml to $AP_PLAYER_DIR"
-cp "$AP_PLAYER_DIR/Templates/Rune Factory 4.yaml" "$AP_PLAYER_DIR"
+    echo "Downloading archipelago installer..."
+    curl -L -# "$INSTALLER_URL" -O
 
+    echo "Using Proton: $PROTON_PATH"
+    echo "Installing $INSTALLER_FILE..."
+    "$PROTON_PATH" run "$INSTALLER_FILE" /VERYSILENT /NORESTART >/dev/null 2>&1
+    rm "$INSTALLER_FILE"
+}
+
+generate_player_yaml() {
+    echo "Generating yaml templates..."
+    "$PROTON_PATH" run "C:\ProgramData\Archipelago\ArchipelagoLauncher.exe" "Generate Template Options" -- --skip_open_folder >/dev/null 2>&1
+
+    echo "Installing Rune Factory 4 Special yaml to $AP_PLAYER_DIR"
+    cp "$AP_PLAYER_DIR/Templates/Rune Factory 4.yaml" "$AP_PLAYER_DIR"
+}
+
+install_desktop_launcher() {
 echo "Setting up desktop launcher..."
 DESKTOP_FILE_NAME="archipelago-launcher.desktop"
 DESKTOP_FILE_PATH="$HOME/Desktop/$DESKTOP_FILE_NAME"
@@ -115,17 +126,29 @@ EOF
 
 chmod +x "$SCRIPT"
 chmod +x "$DESKTOP_FILE_PATH"
+}
 
-echo "Cleaning up files..."
-rm "$INSTALLER_FILE"
+main() {
+    find_newest_proton
+    if [ ! -d "$AP_DIR" ]; then
+        install_archipelago
+    else
+        echo -e "Archipelago is already installed"
+    fi
+    install_ap_world
+    generate_player_yaml
+    install_desktop_launcher
 
-echo -e "${YELLOW}Install done!"
-echo -e "You can start achipelago from the desktop by double clicking the icon ${BLUE}$DESKTOP_FILE_NAME${YELLOW}"
-echo -e "You can alter the yaml config at ${BLUE}$AP_PLAYER_DIR${YELLOW}"
-echo -e "Then generate your game and it will be under ${BLUE}$AP_DIR/output${YELLOW}"
-echo -e "In the output zip from generation, there will be a save marked with your chosen player name."
-echo -e "Place that save into ${BLUE}$RF4_LINUX_INSTALL_FOLDER/Archipelago${YELLOW}"
-echo -e "If you have Trupin hints enabled, also place your hints.json file in the same folder as well."
-echo -e "When asked for the rf4 install path paste ${BLUE}$RF4_WINE_INSTALL_PATH${YELLOW}"
-echo -e "When asked for the save path paste ${BLUE}$RF4_WINE_SAVE_PATH${YELLOW}"
-echo -e "Enjoy!${NC}"
+    echo -e "${YELLOW}Install done!"
+    echo -e "You can start achipelago from the desktop by double clicking the icon ${BLUE}$DESKTOP_FILE_NAME${YELLOW}"
+    echo -e "You can alter the yaml config at ${BLUE}$AP_PLAYER_DIR${YELLOW}"
+    echo -e "Then generate your game and it will be under ${BLUE}$AP_DIR/output${YELLOW}"
+    echo -e "In the output zip from generation, there will be a save marked with your chosen player name."
+    echo -e "Place that save into ${BLUE}$RF4_LINUX_INSTALL_FOLDER/Archipelago${YELLOW}"
+    echo -e "If you have Trupin hints enabled, also place your hints.json file in the same folder as well."
+    echo -e "When asked for the rf4 install path paste ${BLUE}$RF4_WINE_INSTALL_PATH${YELLOW}"
+    echo -e "When asked for the save path paste ${BLUE}$RF4_WINE_SAVE_PATH${YELLOW}"
+    echo -e "Enjoy!${NC}"
+}
+
+main
